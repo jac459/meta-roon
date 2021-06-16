@@ -1,0 +1,197 @@
+{ "name":"Roon Player",
+    "manufacturer":"Roon",
+    "type":"AVRECEIVER",
+    "version":15,
+    "persistedvariables":{
+      "ToInitiate":false
+    },
+    "discover":{
+      "welcomeheadertext":"Roon Media Player",
+      "welcomedescription":"powered by meta\nby JAC459",
+      "command": {"type":"http-get", "command":"http://localhost:1880/roon/discover", "queryresult":"$.zones.*"}
+    },
+    "template" : {
+      "dynamicname":"DYNAMIK_INST_START DYNAMIK \"Roon Zone \" + JSON.parse(\"$Result\").display_name DYNAMIK_INST_END",
+      "dynamicid":"DYNAMIK_INST_START DYNAMIK JSON.parse(\"$Result\").zone_id DYNAMIK_INST_END",
+      "variables":{
+        "DataZone":"DYNAMIK_INST_START DYNAMIK let dz = JSON.stringify(\"$Result\"); dz.substring(1, dz.length-1) DYNAMIK_INST_END",
+        "ZoneId":"DYNAMIK_INST_START DYNAMIK JSON.parse(\"$Result\").zone_id DYNAMIK_INST_END",
+        "Output":"DYNAMIK_INST_START DYNAMIK let op = JSON.stringify(JSON.stringify(JSON.parse(\"$Result\").outputs[0])); op.substring(1, op.length-1) DYNAMIK_INST_END",
+        "VolumePlayed":"",
+        "Playing":"",
+        "Queues":[],
+        "Duration":"",
+        "MyCurrentZone":"",
+        "Progress":"",
+        "AlbumCoverURI":"",
+        "ArtistCoverURI":"",
+        "ArtistListURI":"",
+        "AlbumListURI":"",
+        "MyListItem":"",
+        "MyState":"",
+        "MyStatus":""
+      },  
+      "images": {
+        "AlbumCover": {
+          "label": "",
+          "size": "large",
+          "listen": "AlbumCoverURI"
+        },
+        "ArtistCover": {
+          "label": "",
+          "size": "large",
+          "listen": "ArtistCoverURI"
+        }      
+      },  
+      "listeners": {
+        "roonStatus": {
+          "type": "mqtt",
+          "command": "meta/roon/status", 
+          "queryresult": "",
+          "evalwrite": [
+            {
+              "variable": "MyStatus",
+              "value": "$Result"
+            }
+          ]
+        },
+        "roonQueue": {
+          "type": "mqtt",
+          "command": "meta/roon/queue", 
+          "queryresult": "",
+          "evalwrite": [
+            {
+              "variable": "Queues",
+              "value": "$Result"
+            }
+          ]
+        },
+        "roonState": {
+          "type": "mqtt",
+          "command": "meta/roon/state", 
+          "queryresult": "$.zones.*",
+          "evalwrite": [
+            {
+              "variable": "MyCurrentZone",
+              "value": "DYNAMIK let cz = JSON.stringify(JSON.parse(\"$Result\").find((zn) => {return zn.zone_id == \"$ZoneId\"})); if (cz) { cz; } else { cz = JSON.stringify($MyCurrentZone); cz; }"
+            },
+            {
+              "variable": "Output",
+              "value": "DYNAMIK let outs = $MyCurrentZone.outputs; let out = JSON.stringify(outs.find((ot) => {return ot.output_id == $Output.output_id})); out;"
+            },
+            {
+              "variable": "MyState",
+              "value": "DYNAMIK if ($MyCurrentZone.now_playing) {let cz = $MyCurrentZone.now_playing.one_line.line1; cz;} else {\"Zone is not playing.\"}"
+            },
+            {
+              "variable": "Playing",
+              "value": "DYNAMIK let p = $MyCurrentZone.state; p == \"playing\";"
+            },
+            {
+              "variable": "VolumePlayed",
+              "value": "DYNAMIK let v = $Output.volume.value; v;"
+            },            {
+              "variable": "Duration",
+              "value": "DYNAMIK let dur = $MyCurrentZone.now_playing.length; dur;"
+            },
+            {
+              "variable": "AlbumCoverURI",
+              "value": "DYNAMIK let uri = \"http://192.168.50.114:1880/roon/image?image_key=\" + $MyCurrentZone.now_playing.image_key; uri;"
+            },
+            {
+              "variable": "Progress",
+              "value": "DYNAMIK let prog = $MyCurrentZone.now_playing.seek_position/$MyCurrentZone.now_playing.length; Math.round(prog*100);"
+            }
+          ]
+        }
+      },
+
+      "labels":{
+          "CurrentStatus" : {"label":"status", "actionlisten":"MyStatus", "listen":"MyState"}
+      },
+      "buttons":{
+          "VOLUME UP": {"label":"", "type":"static", "command":"", "evalwrite":[{"variable":"VolumePlayed","value":"DYNAMIK (Number($VolumePlayed)<95)?Number($VolumePlayed)+5:100"}], "evaldo":[{"test":true, "then":"__VOLUMESET", "or":""}]},
+          "VOLUME DOWN": {"label":"", "type":"static", "command":"", "evalwrite":[{"variable":"VolumePlayed","value":"DYNAMIK (Number($VolumePlayed)>5)?Number($VolumePlayed)-5:0"}], "evaldo":[{"test":true, "then":"__VOLUMESET", "or":""}]},
+          "POWER ON": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"__INITIALISE", "or":""}]},
+          "POWER OFF": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"__CLEANUP", "or":""}]},
+          "CURSOR UP": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"PLAY", "or":""}]},
+          "CURSOR LEFT": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"PREVIOUS", "or":""}]},
+          "CURSOR RIGHT": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"NEXT", "or":""}]},
+          "CURSOR DOWN": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"STOP", "or":""}]},
+          "CURSOR ENTER": {"label":"", "type":"static", "command":"", "evaldo":[{"test":true,"then":"PLAY TOGGLE", "or":""}]},
+          "PLAY": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"play\\\\\\\"}}\\\"}\""},
+          "PLAY TOGGLE": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"playpause\\\\\\\"}}\\\"}\""},
+          "PAUSE": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"pause\\\\\\\"}}\\\"}\""},
+          "STOP": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"stop\\\\\\\"}}\\\"}\""},
+          "PREVIOUS": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"previous\\\\\\\"}}\\\"}\""},
+          "NEXT": {"label":"", "type":"mqtt", "command":"DYNAMIK let dz = JSON.stringify(JSON.stringify($DataZone));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"zone\\\\\\\":\" + dz.substring(1, dz.length-1) + \", \\\\\\\"control\\\\\\\":\\\\\\\"next\\\\\\\"}}\\\"}\""},
+          "__PING_STATE": {"label":"", "type":"mqtt", "command":"{\"topic\":\"meta/roon\", \"message\":\"{\\\"state\\\":true}\"}"},
+          "__VOLUMESET": {"label":"", "type":"mqtt", "command":"DYNAMIK let op = JSON.stringify(JSON.stringify($Output));\"{\\\"topic\\\":\\\"meta/roon\\\", \\\"message\\\":\\\"{\\\\\\\"transport\\\\\\\":{\\\\\\\"output\\\\\\\":\" + op.substring(1, op.length-1) + \", \\\\\\\"volume\\\\\\\":\\\\\\\"$VolumePlayed\\\\\\\"}}\\\"}\""},
+          "__PROGRESSSET": {"label":"", "type":"mqtt", "command":"DYNAMIK let prog = Math.round($MyCurrentZone.now_playing.length/100*$Progress);let cz = $MyCurrentZone; let mes = {\"transport\":{\"zone\":\"\", \"seek\":prog}}; mes.transport.zone = cz; let fullMess = {\"topic\":\"meta/roon\", \"message\":\"\"};fullMess.message = mes; fullMess"}
+      },
+      "sliders":{
+        "PROGRESS": {"label":"", "unit" : "%", "listen" : "Progress", "evaldo":[{"test":true, "then":"__PROGRESSSET", "or":""}]},
+        "VOLUME": {"label":"", "unit" : "db", "listen" : "VolumePlayed", "evaldo":[{"test":true, "then":"__VOLUMESET", "or":""}]}
+    },
+      "directories":{
+          "Outputs": {"label":"", 
+            "feeders": {
+              "Outputs":{"label":"", "commandset": [{"type":"static", "command":"$DataZone", "queryresult":"$.outputs.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").display_name", "itemlabel":"Zone Output", "itemaction":"OutputSet", "itemimage":""}]},
+              "OutputSet":{"label":"", "commandset": [{"type":"static", "command":"SResult", "evalwrite":[{"variable":"Output","value":"$Result"}]}]}
+            }
+          },
+          "Artists": {"label":"", 
+            "feeders": {
+              "Artists":{"label":"Artists list", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"","itemimage":"https://raw.githubusercontent.com/jac459/metadriver/master/pictures/guitar.jpg"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"artists\",\"multi_session_key\":\"$ZoneId\", \"level\":0}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":true, "then":"Albums", "or":""}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+                ]},
+              "Albums":{"label":"Albums list", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"", "itemimage":"$ArtistListURI"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"artists\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\",\"count\":256,\"level\":1}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK let ik = JSON.parse(\"$Result\").image_key; ik?\"http://192.168.50.114:1880/roon/image?image_key=\"+ik:\"$ArtistListURI\";", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":true, "then":"Songs", "or":""}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"AlbumListURI","value":"DYNAMIK let ik = JSON.parse(\"$Result\").image_key; ik?\"http://192.168.50.114:1880/roon/image?image_key=\"+ik:\"$ArtistListURI\";"}]}
+                ]},
+              "Songs":{"label":"Songs list", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"", "itemimage":"$AlbumListURI"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"artists\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\",\"count\":256,\"level\":2}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"$AlbumListURI", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":true, "then":"Actions", "or":""}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"}]}
+                ]},
+              "Actions":{"label":"Actions list", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"", "itemimage":"$AlbumListURI"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"artists\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\",\"count\":256}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"$AlbumListURI", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"}]}
+                ]},
+              "Action":{"label":"Action", "commandset": [
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"artists\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\",\"zone_or_output_id\":\"$ZoneId\"}"}
+                ]}                
+              }
+          },
+          "Browse": {"label":"", 
+            "feeders": {
+              "Browse1":{"label":"Browse", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"","itemimage":"https://raw.githubusercontent.com/jac459/metadriver/master/pictures/guitar.jpg"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\", \"level\":0,\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":"DYNAMIK JSON.parse(\"$Result\").hint == \"list\"", "then":"Browse", "or":"Actions"}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+                ]},
+              "Browse2":{"label":"Browse", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"","itemimage":"https://raw.githubusercontent.com/jac459/metadriver/master/pictures/guitar.jpg"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\", \"level\":1,\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":"DYNAMIK JSON.parse(\"$Result\").hint == \"list\"", "then":"Browse3", "or":"Actions"}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+              ]},
+              "Browse3":{"label":"Browse", "commandset": [
+                {"type":"static", "command":".", "itemtype":"tile", "itemaction":"", "itemUI":"","itemimage":"https://raw.githubusercontent.com/jac459/metadriver/master/pictures/guitar.jpg"},
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\", \"level\":2,\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":"DYNAMIK JSON.parse(\"$Result\").hint == \"list\"", "then":"Browse4", "or":"Actions"}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+                ]},
+              "Browse4":{"label":"Browse", "commandset": [
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\", \"level\":3,\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":"DYNAMIK JSON.parse(\"$Result\").hint == \"list\"", "then":"Browse5", "or":"Actions"}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+              ]},
+              "Browse5":{"label":"Browse", "commandset": [
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\", \"level\":4,\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalnext":[{"test":"DYNAMIK JSON.parse(\"$Result\").hint == \"list\"", "then":"Browse5", "or":"Actions"}], "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"},{"variable":"ArtistListURI","value":"DYNAMIK \"http://192.168.50.114:1880/roon/image?image_key=\" + JSON.parse(\"$Result\").image_key"}]}
+              ]},
+              "Actions":{"label":"Actions list", "commandset": [
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\"}", "queryresult":"$.items.*", "itemname":"DYNAMIK JSON.parse(\"$Result\").title", "itemlabel":"DYNAMIK JSON.parse(\"$Result\").subtitle", "itemimage":"$AlbumListURI", "itemaction": "DYNAMIK (JSON.parse(\"$Result\").hint == \"action\")?\"Action\":undefined", "evalwrite":[{"variable":"MyListItem","value":"DYNAMIK JSON.parse(\"$Result\").item_key"}]}
+                ]},
+              "Action":{"label":"Action", "commandset": [
+                {"type":"http-get", "command":"http://localhost:1880/roon/browse?browse={\"hierarchy\":\"browse\",\"multi_session_key\":\"$ZoneId\",\"item_key\":\"$MyListItem\",\"zone_or_output_id\":\"$ZoneId\"}"}
+                ]                
+              }
+            }
+         }
+      }      
+    }
+  }
